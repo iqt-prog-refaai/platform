@@ -322,10 +322,30 @@ async function submitQuestion() {
     explanation: $('questionExplanation')?.value?.trim() || null
   };
 
+  const questionId = $('questionId').value;
+
   if (!MOCK_MODE) {
-    await API.post('addQuestion', data);
+    if (questionId) {
+      await API.post('editItem', { 
+        itemType: 'question', 
+        id: questionId, 
+        updates: { 
+          2: type, 
+          3: text, 
+          4: JSON.stringify(options), 
+          5: JSON.stringify(correct), 
+          6: data.points,
+          8: data.explanation || ''
+        } 
+      });
+      showToast('تم تعديل السؤال!');
+    } else {
+      await API.post('addQuestion', data);
+      showToast('تمت إضافة السؤال!');
+    }
+  } else {
+    showToast(questionId ? 'تم تعديل السؤال!' : 'تمت إضافة السؤال!');
   }
-  showToast('تمت إضافة السؤال!');
   closeModal();
   await refreshAndRenderAdmin();
 }
@@ -456,7 +476,8 @@ async function submitImport() {
         options: q.options || null,
         correct_answer: q.correct_answer ?? null,
         points: q.points || 1,
-        order_index: state.questions[quizId].length
+        order_index: state.questions[quizId].length,
+        explanation: q.explanation || ''
       });
     });
     showToast(`✓ تم استيراد ${questions.length} أسئلة! (وضع تجريبي)`);
@@ -489,7 +510,8 @@ async function submitImport() {
         options: q.options || null,
         correct_answer: q.correct_answer ?? null,
         points: q.points || 1,
-        order_index: i
+        order_index: i,
+        explanation: q.explanation || ''
       });
       if (res && res.success) successCount++;
       else failCount++;

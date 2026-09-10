@@ -1,10 +1,10 @@
 // ==========================================
 // Google Apps Script - LMS Backend
-// Sheet ID: 1OnvFNlJlMGrxv6UCZAZmT2cJr1SG8j2AjRHOYWWWe7U
+// Sheet ID: 1RaF-85znR0np3ngv6muGWtf334m4YWa8hB4LYLGael8
 // Deploy as Web App (Execute as Me, Allow Anyone)
 // ==========================================
 
-const SHEET_ID = '1OnvFNlJlMGrxv6UCZAZmT2cJr1SG8j2AjRHOYWWWe7U';
+const SHEET_ID = '1RaF-85znR0np3ngv6muGWtf334m4YWa8hB4LYLGael8';
 
 function doGet(e) {
   const action = e.parameter.action;
@@ -286,9 +286,10 @@ function getQuestions(quizId) {
         type: data[i][2],
         question_text: data[i][3],
         options: data[i][4] ? JSON.parse(data[i][4]) : null,
-        correct_answer: data[i][5] ? JSON.parse(data[i][5]) : null,
+        correct_answer: data[i][5] !== "" ? JSON.parse(data[i][5]) : null,
         points: parseInt(data[i][6]) || 1,
-        order_index: parseInt(data[i][7]) || 0
+        order_index: parseInt(data[i][7]) || 0,
+        explanation: data[i][8] || ''
       });
     }
   }
@@ -303,19 +304,24 @@ function addQuestion(data) {
     data.quiz_id, 
     data.type, 
     data.question_text, 
-    JSON.stringify(data.options), 
-    JSON.stringify(data.correct_answer), 
+    JSON.stringify(data.options || null), 
+    JSON.stringify(data.correct_answer ?? null), 
     data.points || 1, 
-    data.order_index || 0
+    data.order_index || 0,
+    data.explanation || ''
   ]);
   return { success: true, question_id: id };
 }
 
 // ====== IMPORT QUIZ ======
 function importQuiz(data) {
-  const quizSheet = getSheet('quizzes');
-  const quizId = generateId();
-  quizSheet.appendRow([quizId, data.material_id, data.title, data.description || '', new Date().toISOString()]);
+  let quizId = data.quiz_id;
+  
+  if (!quizId) {
+    const quizSheet = getSheet('quizzes');
+    quizId = generateId();
+    quizSheet.appendRow([quizId, data.material_id, data.title, data.description || '', new Date().toISOString()]);
+  }
 
   const qSheet = getSheet('questions');
   data.questions.forEach((q, idx) => {
@@ -325,10 +331,11 @@ function importQuiz(data) {
       quizId,
       q.type,
       q.question_text,
-      JSON.stringify(q.options),
-      JSON.stringify(q.correct_answer),
+      JSON.stringify(q.options || null),
+      JSON.stringify(q.correct_answer ?? null),
       q.points || 1,
-      idx
+      idx,
+      q.explanation || ''
     ]);
   });
 
