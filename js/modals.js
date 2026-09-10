@@ -72,6 +72,7 @@ function showModal(type, id = null) {
           <option value="pdf" ${isEdit && data.type === 'pdf' ? 'selected' : ''}>PDF / مستند</option>
           <option value="quiz" ${isEdit && data.type === 'quiz' ? 'selected' : ''}>اختبار</option>
           <option value="video" ${isEdit && data.type === 'video' ? 'selected' : ''}>فيديو</option>
+          <option value="article" ${isEdit && data.type === 'article' ? 'selected' : ''}>مقال / صفحة ويب</option>
         </select>
       </div>
       <div class="input-group" id="contentField" style="display: ${isEdit && data.type === 'quiz' ? 'none' : 'block'}">

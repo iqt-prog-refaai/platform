@@ -27,6 +27,8 @@ async function renderMaterialViewer(lessonId) {
       html += await renderQuizMaterial(mat, isCompleted);
     } else if (mat.type === 'video') {
       html += renderVideoMaterial(mat, isCompleted);
+    } else if (mat.type === 'article') {
+      html += renderArticleMaterial(mat, isCompleted);
     }
   }
 
@@ -221,6 +223,33 @@ function renderVideoMaterial(mat, isCompleted) {
       </iframe>
     </div>
     <div style="display:flex; gap:10px; justify-content:center;">
+      <button class="btn btn-success" onclick="markComplete('${mat.material_id}')">
+        ${ICONS.check} تحديد كمكتمل
+      </button>
+    </div>
+    <hr style="margin: 32px 0; border: none; border-top: 1px solid var(--border);">
+  `;
+}
+
+// ------ ARTICLE ------
+function renderArticleMaterial(mat, isCompleted) {
+  return `
+    <div class="material-header">
+      <span class="material-type-badge" style="background: var(--primary-light); color: white; padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 600;">${ICONS.document} مقال تفاعلي</span>
+      <h2>${mat.title}</h2>
+      ${isCompleted ? `<span style="color: var(--success); display:inline-flex; align-items:center; gap:6px; margin-top:8px;">${ICONS.check} مكتمل</span>` : ''}
+    </div>
+    <div style="position:relative; height: 75vh; overflow:hidden; border-radius:16px; margin-bottom:20px; border: 1px solid var(--border); box-shadow: var(--shadow);">
+      <iframe
+        src="${mat.content}"
+        style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;background:white;"
+        allowfullscreen>
+      </iframe>
+    </div>
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap: wrap;">
+      <a href="${mat.content}" target="_blank" class="btn btn-secondary">
+        ${ICONS.document} فتح في نافذة جديدة
+      </a>
       <button class="btn btn-success" onclick="markComplete('${mat.material_id}')">
         ${ICONS.check} تحديد كمكتمل
       </button>
