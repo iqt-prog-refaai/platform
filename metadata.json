@@ -1,0 +1,8 @@
+{
+  "name": "IQT - منصة التعليم",
+  "description": "منصة IQT التعليمية - تعلّم بشكل تفاعلي مع وحدات ودروس واختبارات متنوعة",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

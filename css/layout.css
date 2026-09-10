@@ -1,0 +1,156 @@
+/* ============================================
+   LAYOUT.CSS — Navigation, Pages, Admin Grid,
+                Login, Responsive
+   ============================================ */
+
+/* ===== NAVIGATION ===== */
+.nav-bar {
+  position: fixed;
+  top: 0; right: 0; left: 0;
+  z-index: 100;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 30px;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-logo {
+  font-family: 'Space Grotesk', 'Tajawal', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -1px;
+}
+.nav-links {
+  display: flex;
+  gap: 8px;
+}
+.nav-link {
+  padding: 8px 16px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 700;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+.nav-link:hover, .nav-link.active {
+  color: var(--text);
+  background: rgba(99, 102, 241, 0.1);
+}
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: white;
+}
+
+/* ===== PAGE TRANSITIONS ===== */
+.page {
+  display: none;
+  animation: pageIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 100px 30px 40px;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+.page.active { display: block; }
+
+/* ===== LOGIN PAGE ===== */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+}
+.login-card {
+  width: 100%;
+  max-width: 440px;
+  padding: 48px;
+  position: relative;
+  overflow: hidden;
+}
+.login-card::after {
+  content: '';
+  position: absolute;
+  top: -50%; right: -50%;
+  width: 200%; height: 200%;
+  background: conic-gradient(from 0deg, transparent, var(--primary), transparent 30%);
+  animation: rotate 4s linear infinite;
+  opacity: 0.08;
+  z-index: -1;
+}
+.login-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+.login-header h1 {
+  font-family: 'Space Grotesk', 'Tajawal', sans-serif;
+  font-size: 2.2rem;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.login-header p { color: var(--text-muted); }
+
+/* ===== ADMIN PANEL ===== */
+.admin-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+}
+.admin-sidebar {
+  padding: 24px;
+  height: fit-content;
+  position: sticky;
+  top: 90px;
+}
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-bottom: 4px;
+  font-weight: 700;
+}
+.admin-nav-item:hover, .admin-nav-item.active {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--text);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  .admin-grid { grid-template-columns: 1fr; }
+  .admin-sidebar { position: static; padding: 16px; margin-bottom: 16px; }
+  .page { padding: 80px 16px 30px; }
+  .login-card { padding: 32px 24px; }
+  
+  .nav-bar { padding: 0 16px; height: 60px; }
+  .nav-logo { font-size: 1.3rem; }
+  .nav-link { padding: 6px 10px; font-size: 0.85rem; }
+  .avatar { width: 32px; height: 32px; font-size: 0.8rem; }
+  .nav-user span { font-size: 0.85rem; }
+}

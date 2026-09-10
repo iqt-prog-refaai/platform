@@ -1,0 +1,550 @@
+// ==========================================
+// Google Apps Script - LMS Backend
+// Sheet ID: 1OnvFNlJlMGrxv6UCZAZmT2cJr1SG8j2AjRHOYWWWe7U
+// Deploy as Web App (Execute as Me, Allow Anyone)
+// ==========================================
+
+const SHEET_ID = '1OnvFNlJlMGrxv6UCZAZmT2cJr1SG8j2AjRHOYWWWe7U';
+
+function doGet(e) {
+  const action = e.parameter.action;
+  let result = { success: false, message: 'Unknown action' };
+
+  try {
+    switch(action) {
+      case 'login':
+        result = handleLogin(e.parameter.username, e.parameter.password);
+        break;
+      case 'getUnits':
+        result = getUnits();
+        break;
+      case 'getLessons':
+        result = getLessons(e.parameter.unitId);
+        break;
+      case 'getMaterials':
+        result = getMaterials(e.parameter.lessonId);
+        break;
+      case 'getAllMaterials':
+        result = getAllMaterials();
+        break;
+      case 'getQuizzes':
+        result = getQuizzes(e.parameter.materialId);
+        break;
+      case 'getQuestions':
+        result = getQuestions(e.parameter.quizId);
+        break;
+      case 'getStudentProgress':
+        result = getStudentProgress(e.parameter.username);
+        break;
+      case 'getQuizAttempts':
+        result = getQuizAttempts(e.parameter.username, e.parameter.quizId);
+        break;
+      case 'getAllStudents':
+        result = getAllStudents();
+        break;
+      case 'getStudentDetails':
+        result = getStudentDetails(e.parameter.username);
+        break;
+    }
+  } catch(err) {
+    result = { success: false, message: err.toString() };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  const data = JSON.parse(e.postData.contents);
+  const action = data.action;
+  let result = { success: false, message: 'Unknown action' };
+
+  try {
+    switch(action) {
+      case 'addUnit':
+        result = addUnit(data);
+        break;
+      case 'addLesson':
+        result = addLesson(data);
+        break;
+      case 'addMaterial':
+        result = addMaterial(data);
+        break;
+      case 'updateMaterialOrder':
+        result = updateMaterialOrder(data);
+        break;
+      case 'addQuiz':
+        result = addQuiz(data);
+        break;
+      case 'addQuestion':
+        result = addQuestion(data);
+        break;
+      case 'updateStudentProgress':
+        result = updateStudentProgress(data);
+        break;
+      case 'submitQuiz':
+        result = submitQuiz(data);
+        break;
+      case 'gradeEssay':
+        result = gradeEssay(data);
+        break;
+      case 'importQuiz':
+        result = importQuiz(data);
+        break;
+      case 'deleteItem':
+        result = deleteItem(data);
+        break;
+      case 'editItem':
+        result = editItem(data);
+        break;
+    }
+  } catch(err) {
+    result = { success: false, message: err.toString() };
+  }
+
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ====== HELPER FUNCTIONS ======
+function getSheet(name) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    // Set headers based on sheet name
+    const headers = {
+      'credits': ['name', 'username', 'password', 'role'],
+      'units': ['unit_id', 'unit_number', 'unit_name', 'created_at'],
+      'lessons': ['lesson_id', 'unit_id', 'lesson_number', 'lesson_name', 'created_at'],
+      'materials': ['material_id', 'lesson_id', 'title', 'type', 'content', 'order_index', 'created_at'],
+      'quizzes': ['quiz_id', 'material_id', 'title', 'description', 'created_at'],
+      'questions': ['question_id', 'quiz_id', 'type', 'question_text', 'options', 'correct_answer', 'points', 'order_index'],
+      'student_progress': ['username', 'current_unit_id', 'current_lesson_id', 'completed_lessons', 'completed_materials', 'updated_at'],
+      'quiz_attempts': ['attempt_id', 'username', 'quiz_id', 'material_id', 'answers', 'score', 'max_score', 'is_graded', 'graded_by', 'feedback', 'attempt_date']
+    };
+    if (headers[name]) sheet.getRange(1, 1, 1, headers[name].length).setValues([headers[name]]);
+  }
+  return sheet;
+}
+
+function generateId() {
+  return Utilities.getUuid().substring(0, 8);
+}
+
+// ====== AUTH ======
+function handleLogin(username, password) {
+  const sheet = getSheet('credits');
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === username && data[i][2] === password) {
+      return { success: true, user: { name: data[i][0], username: data[i][1], role: data[i][3] } };
+    }
+  }
+  return { success: false, message: 'Invalid credentials' };
+}
+
+// ====== UNITS ======
+function getUnits() {
+  const sheet = getSheet('units');
+  const data = sheet.getDataRange().getValues();
+  const units = [];
+  for (let i = 1; i < data.length; i++) {
+    units.push({ unit_id: data[i][0], unit_number: data[i][1], unit_name: data[i][2], created_at: data[i][3] });
+  }
+  return { success: true, units: units.sort((a,b) => a.unit_number - b.unit_number) };
+}
+
+function addUnit(data) {
+  const sheet = getSheet('units');
+  const id = generateId();
+  sheet.appendRow([id, data.unit_number, data.unit_name, new Date().toISOString()]);
+  return { success: true, unit_id: id };
+}
+
+// ====== LESSONS ======
+function getLessons(unitId) {
+  const sheet = getSheet('lessons');
+  const data = sheet.getDataRange().getValues();
+  const lessons = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === unitId) {
+      lessons.push({ lesson_id: data[i][0], unit_id: data[i][1], lesson_number: data[i][2], lesson_name: data[i][3] });
+    }
+  }
+  return { success: true, lessons: lessons.sort((a,b) => a.lesson_number - b.lesson_number) };
+}
+
+function addLesson(data) {
+  const sheet = getSheet('lessons');
+  const id = generateId();
+  sheet.appendRow([id, data.unit_id, data.lesson_number, data.lesson_name, new Date().toISOString()]);
+  return { success: true, lesson_id: id };
+}
+
+// ====== MATERIALS ======
+function getMaterials(lessonId) {
+  const sheet = getSheet('materials');
+  const data = sheet.getDataRange().getValues();
+  const materials = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === lessonId) {
+      materials.push({ 
+        material_id: data[i][0], 
+        lesson_id: data[i][1], 
+        title: data[i][2], 
+        type: data[i][3], 
+        content: data[i][4], 
+        order_index: parseInt(data[i][5]) || 0 
+      });
+    }
+  }
+  return { success: true, materials: materials.sort((a,b) => a.order_index - b.order_index) };
+}
+
+function getAllMaterials() {
+  const sheet = getSheet('materials');
+  const data = sheet.getDataRange().getValues();
+  const materials = [];
+  for (let i = 1; i < data.length; i++) {
+    materials.push({ 
+      material_id: data[i][0], 
+      lesson_id: data[i][1], 
+      title: data[i][2], 
+      type: data[i][3], 
+      content: data[i][4], 
+      order_index: parseInt(data[i][5]) || 0,
+      created_at: data[i][6]
+    });
+  }
+  return { success: true, materials };
+}
+
+function addMaterial(data) {
+  const sheet = getSheet('materials');
+  const id = generateId();
+  const order = sheet.getLastRow();
+  sheet.appendRow([id, data.lesson_id, data.title, data.type, data.content || '', order, new Date().toISOString()]);
+
+  // FIX: Auto-create a quiz record when material type is 'quiz'
+  // This ensures getQuizzes(materialId) always finds a record for quiz materials.
+  let quizId = null;
+  if (data.type === 'quiz') {
+    const quizSheet = getSheet('quizzes');
+    quizId = generateId();
+    quizSheet.appendRow([quizId, id, data.title, '', new Date().toISOString()]);
+  }
+
+  return { success: true, material_id: id, quiz_id: quizId };
+}
+
+function updateMaterialOrder(data) {
+  const sheet = getSheet('materials');
+  const allData = sheet.getDataRange().getValues();
+  data.materials.forEach(item => {
+    for (let i = 1; i < allData.length; i++) {
+      if (allData[i][0] === item.material_id) {
+        sheet.getRange(i + 1, 6).setValue(item.order_index);
+        if (item.lesson_id) sheet.getRange(i + 1, 2).setValue(item.lesson_id);
+        break;
+      }
+    }
+  });
+  return { success: true };
+}
+
+// ====== QUIZZES ======
+function getQuizzes(materialId) {
+  const sheet = getSheet('quizzes');
+  const data = sheet.getDataRange().getValues();
+  const quizzes = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === materialId) {
+      quizzes.push({ quiz_id: data[i][0], material_id: data[i][1], title: data[i][2], description: data[i][3] });
+    }
+  }
+  return { success: true, quizzes };
+}
+
+function addQuiz(data) {
+  const sheet = getSheet('quizzes');
+  const id = generateId();
+  sheet.appendRow([id, data.material_id, data.title, data.description || '', new Date().toISOString()]);
+  return { success: true, quiz_id: id };
+}
+
+// ====== QUESTIONS ======
+function getQuestions(quizId) {
+  const sheet = getSheet('questions');
+  const data = sheet.getDataRange().getValues();
+  const questions = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] === quizId) {
+      questions.push({
+        question_id: data[i][0],
+        quiz_id: data[i][1],
+        type: data[i][2],
+        question_text: data[i][3],
+        options: data[i][4] ? JSON.parse(data[i][4]) : null,
+        correct_answer: data[i][5] ? JSON.parse(data[i][5]) : null,
+        points: parseInt(data[i][6]) || 1,
+        order_index: parseInt(data[i][7]) || 0
+      });
+    }
+  }
+  return { success: true, questions: questions.sort((a,b) => a.order_index - b.order_index) };
+}
+
+function addQuestion(data) {
+  const sheet = getSheet('questions');
+  const id = generateId();
+  sheet.appendRow([
+    id, 
+    data.quiz_id, 
+    data.type, 
+    data.question_text, 
+    JSON.stringify(data.options), 
+    JSON.stringify(data.correct_answer), 
+    data.points || 1, 
+    data.order_index || 0
+  ]);
+  return { success: true, question_id: id };
+}
+
+// ====== IMPORT QUIZ ======
+function importQuiz(data) {
+  const quizSheet = getSheet('quizzes');
+  const quizId = generateId();
+  quizSheet.appendRow([quizId, data.material_id, data.title, data.description || '', new Date().toISOString()]);
+
+  const qSheet = getSheet('questions');
+  data.questions.forEach((q, idx) => {
+    const qId = generateId();
+    qSheet.appendRow([
+      qId,
+      quizId,
+      q.type,
+      q.question_text,
+      JSON.stringify(q.options),
+      JSON.stringify(q.correct_answer),
+      q.points || 1,
+      idx
+    ]);
+  });
+
+  return { success: true, quiz_id: quizId, question_count: data.questions.length };
+}
+
+// ====== EDIT & DELETE (CRUD) ======
+function deleteRowsByCol(sheetName, idColIndex, parentIdColIndex, parentId) {
+  const sheet = getSheet(sheetName);
+  const data = sheet.getDataRange().getValues();
+  const deletedIds = [];
+  // Delete from bottom to top to avoid shifting indices
+  for (let i = data.length - 1; i > 0; i--) {
+    if (data[i][parentIdColIndex] === parentId) {
+      deletedIds.push(data[i][idColIndex]);
+      sheet.deleteRow(i + 1);
+    }
+  }
+  return deletedIds;
+}
+
+function deleteItem(data) {
+  const type = data.itemType; // 'unit', 'lesson', 'material', 'quiz', 'question'
+  const id = data.id;
+
+  if (type === 'unit') {
+    deleteRowsByCol('units', 0, 0, id); // delete unit itself
+    const lessonIds = deleteRowsByCol('lessons', 0, 1, id); // unit_id is col 1
+    lessonIds.forEach(lId => {
+      const materialIds = deleteRowsByCol('materials', 0, 1, lId); // lesson_id is col 1
+      materialIds.forEach(mId => {
+        const quizIds = deleteRowsByCol('quizzes', 0, 1, mId); // material_id is col 1
+        quizIds.forEach(qId => deleteRowsByCol('questions', 0, 1, qId)); // quiz_id is col 1
+      });
+    });
+  } else if (type === 'lesson') {
+    deleteRowsByCol('lessons', 0, 0, id);
+    const materialIds = deleteRowsByCol('materials', 0, 1, id);
+    materialIds.forEach(mId => {
+      const quizIds = deleteRowsByCol('quizzes', 0, 1, mId);
+      quizIds.forEach(qId => deleteRowsByCol('questions', 0, 1, qId));
+    });
+  } else if (type === 'material') {
+    deleteRowsByCol('materials', 0, 0, id);
+    const quizIds = deleteRowsByCol('quizzes', 0, 1, id);
+    quizIds.forEach(qId => deleteRowsByCol('questions', 0, 1, qId));
+  } else if (type === 'quiz') {
+    deleteRowsByCol('quizzes', 0, 0, id);
+    deleteRowsByCol('questions', 0, 1, id);
+  } else if (type === 'question') {
+    deleteRowsByCol('questions', 0, 0, id);
+  }
+
+  return { success: true };
+}
+
+function editItem(data) {
+  const type = data.itemType;
+  const id = data.id;
+  const updates = data.updates; // object: { colIndex: newValue }
+
+  let sheetName = '';
+  if (type === 'unit') sheetName = 'units';
+  if (type === 'lesson') sheetName = 'lessons';
+  if (type === 'material') sheetName = 'materials';
+  if (type === 'question') sheetName = 'questions';
+
+  if (!sheetName) return { success: false, message: 'Invalid type' };
+
+  const sheet = getSheet(sheetName);
+  const sheetData = sheet.getDataRange().getValues();
+  for (let i = 1; i < sheetData.length; i++) {
+    if (sheetData[i][0] === id) {
+      for (const [col, val] of Object.entries(updates)) {
+        sheet.getRange(i + 1, parseInt(col) + 1).setValue(val);
+      }
+      return { success: true };
+    }
+  }
+  return { success: false, message: 'Item not found' };
+}
+
+// ====== STUDENT PROGRESS ======
+function getStudentProgress(username) {
+  const sheet = getSheet('student_progress');
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === username) {
+      return { 
+        success: true, 
+        progress: {
+          username: data[i][0],
+          current_unit_id: data[i][1],
+          current_lesson_id: data[i][2],
+          completed_lessons: data[i][3] ? JSON.parse(data[i][3]) : [],
+          completed_materials: data[i][4] ? JSON.parse(data[i][4]) : [],
+          updated_at: data[i][5]
+        }
+      };
+    }
+  }
+  return { success: true, progress: null };
+}
+
+function updateStudentProgress(data) {
+  const sheet = getSheet('student_progress');
+  const allData = sheet.getDataRange().getValues();
+  let found = false;
+  for (let i = 1; i < allData.length; i++) {
+    if (allData[i][0] === data.username) {
+      sheet.getRange(i + 1, 2).setValue(data.current_unit_id || '');
+      sheet.getRange(i + 1, 3).setValue(data.current_lesson_id || '');
+      sheet.getRange(i + 1, 4).setValue(JSON.stringify(data.completed_lessons || []));
+      sheet.getRange(i + 1, 5).setValue(JSON.stringify(data.completed_materials || []));
+      sheet.getRange(i + 1, 6).setValue(new Date().toISOString());
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    sheet.appendRow([
+      data.username,
+      data.current_unit_id || '',
+      data.current_lesson_id || '',
+      JSON.stringify(data.completed_lessons || []),
+      JSON.stringify(data.completed_materials || []),
+      new Date().toISOString()
+    ]);
+  }
+  return { success: true };
+}
+
+// ====== QUIZ ATTEMPTS ======
+function submitQuiz(data) {
+  const sheet = getSheet('quiz_attempts');
+  const id = generateId();
+  const isGraded = !data.answers.some(a => a.type === 'essay');
+
+  sheet.appendRow([
+    id,
+    data.username,
+    data.quiz_id,
+    data.material_id,
+    JSON.stringify(data.answers),
+    data.score,
+    data.max_score,
+    isGraded,
+    '',
+    '',
+    new Date().toISOString()
+  ]);
+
+  return { success: true, attempt_id: id, needs_grading: !isGraded };
+}
+
+function getQuizAttempts(username, quizId) {
+  const sheet = getSheet('quiz_attempts');
+  const data = sheet.getDataRange().getValues();
+  const attempts = [];
+  for (let i = 1; i < data.length; i++) {
+    const matchUser = !username || data[i][1] === username;
+    const matchQuiz = !quizId || data[i][2] === quizId;
+    if (matchUser && matchQuiz) {
+      attempts.push({
+        attempt_id: data[i][0],
+        username: data[i][1],
+        quiz_id: data[i][2],
+        material_id: data[i][3],
+        answers: data[i][4] ? JSON.parse(data[i][4]) : [],
+        score: parseFloat(data[i][5]) || 0,
+        max_score: parseFloat(data[i][6]) || 0,
+        is_graded: data[i][7] === true || data[i][7] === 'TRUE',
+        graded_by: data[i][8],
+        feedback: data[i][9],
+        attempt_date: data[i][10]
+      });
+    }
+  }
+  return { success: true, attempts: attempts.reverse() }; // newest first
+}
+
+function gradeEssay(data) {
+  const sheet = getSheet('quiz_attempts');
+  const allData = sheet.getDataRange().getValues();
+  for (let i = 1; i < allData.length; i++) {
+    if (allData[i][0] === data.attempt_id) {
+      sheet.getRange(i + 1, 6).setValue(data.score);
+      sheet.getRange(i + 1, 8).setValue(true);
+      sheet.getRange(i + 1, 9).setValue(data.graded_by);
+      sheet.getRange(i + 1, 10).setValue(data.feedback || '');
+      return { success: true };
+    }
+  }
+  return { success: false, message: 'Attempt not found' };
+}
+
+// ====== STUDENTS (ADMIN) ======
+function getAllStudents() {
+  const sheet = getSheet('credits');
+  const data = sheet.getDataRange().getValues();
+  const students = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][3] === 'student') {
+      students.push({ name: data[i][0], username: data[i][1], role: data[i][3] });
+    }
+  }
+  return { success: true, students };
+}
+
+function getStudentDetails(username) {
+  const progress = getStudentProgress(username);
+  const attempts = getQuizAttempts(username, null);
+  return { 
+    success: true, 
+    username,
+    progress: progress.progress,
+    attempts: attempts.attempts
+  };
+}
