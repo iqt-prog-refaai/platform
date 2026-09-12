@@ -61,7 +61,21 @@ function showModal(type, id = null) {
     content = `
       <h3 style="margin-bottom: 20px;">${isEdit ? 'تعديل المحتوى' : 'إضافة محتوى'}</h3>
       <input type="hidden" id="materialId" value="${isEdit ? data.material_id : ''}">
-      <input type="hidden" id="materialLessonId" value="${isEdit ? data.lesson_id : id}">
+      ${(!isEdit && (!id || id === 'undefined')) ? `
+        <div class="input-group">
+          <label>الدرس المستهدف (مطلوب)</label>
+          <select id="materialLessonIdSelect">
+            <option value="">-- اختر الدرس --</option>
+            ${state.units.map(u => `
+              <optgroup label="${u.unit_name}">
+                ${(state.lessons[u.unit_id] || []).map(l => `<option value="${l.lesson_id}">${l.lesson_name}</option>`).join('')}
+              </optgroup>
+            `).join('')}
+          </select>
+        </div>
+      ` : `
+        <input type="hidden" id="materialLessonId" value="${isEdit ? data.lesson_id : id}">
+      `}
       <div class="input-group">
         <label>العنوان</label>
         <input type="text" id="materialTitle" value="${isEdit ? data.title : ''}" placeholder="مثال: شرائح العرض">
@@ -277,7 +291,12 @@ async function submitLesson() {
 }
 
 async function submitMaterial() {
-  const lessonId = $('materialLessonId').value;
+  let lessonId = $('materialLessonId') ? $('materialLessonId').value : null;
+  if (!lessonId || lessonId === 'undefined') {
+    lessonId = $('materialLessonIdSelect')?.value;
+  }
+  if (!lessonId) { showToast('يرجى اختيار الدرس', 'error'); return; }
+
   const title = $('materialTitle').value.trim();
   const type = $('materialType').value;
   const rawContent = $('materialLinkInput')?.value?.trim() || '';
@@ -409,7 +428,7 @@ function previewImportJson() {
       errors.push(`سؤال ${idx}: نص السؤال (question_text) مطلوب`);
       return;
     }
-    if (q.type !== 'essay') {
+    if (q.type !== 'essay' && q.type !== 'matching') {
       if (!Array.isArray(q.options) || q.options.length < 2) {
         errors.push(`سؤال ${idx}: options يجب أن تكون مصفوفة بها خيارين على الأقل`);
         return;
@@ -418,6 +437,13 @@ function previewImportJson() {
         errors.push(`سؤال ${idx}: correct_answer يجب أن يكون رقم index صالح في نطاق options`);
         return;
       }
+    } else if (q.type === 'matching') {
+      if (!Array.isArray(q.options) || q.options.length < 2) {
+        errors.push(`سؤال ${idx}: options لأسئلة التوصيل يجب أن تكون مصفوفة بها زوجين على الأقل`);
+        return;
+      }
+      // Matching questions don't use a single correct_answer index, so set it to 0 or null
+      if (q.correct_answer === undefined) q.correct_answer = null;
     }
     valid.push(q);
   });
