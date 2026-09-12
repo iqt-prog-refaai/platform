@@ -7,7 +7,7 @@
 // ==========================================
 // START QUIZ
 // ==========================================
-async function startQuiz(materialId, quizId) {
+async function startQuiz(materialId, quizId, isReviewMode = false) {
   if (!quizId) {
     showToast('This quiz has not been set up yet. Contact your instructor.', 'error');
     return;
@@ -95,13 +95,15 @@ async function startQuiz(materialId, quizId) {
       answers: new Array(questions.length).fill(null),
       score: 0,
       maxScore: questions.reduce((acc, q) => acc + (q.points || 1), 0),
-      timeLeft: timeLimitSecs,
-      timerInterval: null
+      timeLeft: isReviewMode ? 60 : timeLimitSecs,
+      timerInterval: null,
+      isReviewMode,
+      answerConfirmed: false
     };
 
     navigateTo('quiz');
     renderQuizQuestion();
-    if (timeLimitSecs > 0) startQuizTimer();
+    if (timeLimitSecs > 0 || isReviewMode) startQuizTimer();
 
   } catch (err) {
     showToast('Error loading quiz', 'error');
@@ -119,13 +121,20 @@ function startQuizTimer() {
   if (quiz.timerInterval) clearInterval(quiz.timerInterval);
 
   quiz.timerInterval = setInterval(() => {
-    quiz.timeLeft--;
-    updateTimerDisplay();
+    if (quiz.timeLeft > 0) {
+      quiz.timeLeft--;
+      updateTimerDisplay();
+    }
+    
     if (quiz.timeLeft <= 0) {
       clearInterval(quiz.timerInterval);
       quiz.timerInterval = null;
-      showToast('⏰ Time is up! Submitting your quiz...', 'error');
-      submitQuiz();
+      if (!quiz.isReviewMode) {
+        showToast('⏰ انتهى الوقت! جاري تسليم الاختبار...', 'error');
+        submitQuiz();
+      } else {
+        // Just stop quietly in review mode
+      }
     }
   }, 1000);
 }
@@ -168,6 +177,11 @@ function renderQuizQuestion() {
   const q = quiz.questions[quiz.currentIndex];
   const prevAns = quiz.answers[quiz.currentIndex]; // previously recorded answer (for going back)
 
+  if (quiz.isReviewMode && !quiz.answerConfirmed) {
+    quiz.timeLeft = 60;
+    startQuizTimer();
+  }
+
   // Progress dots
   const progressHtml = quiz.questions.map((_, i) => {
     let cls = '';
@@ -180,45 +194,70 @@ function renderQuizQuestion() {
 
   // Question body
   let questionHtml = '';
-  if (q.type === 'mcq') {
+  if (q.type === 'mcq' || q.type === 'true_false') {
+    const labels = q.type === 'true_false' ? (Array.isArray(q.options) && q.options.length ? q.options : ['صح', 'خطأ']) : q.options;
     questionHtml = `
       <div class="options-grid">
-        ${q.options.map((opt, i) => `
-          <div class="option-item ${prevAns?.answer === i ? 'selected' : ''}"
-               onclick="selectOption(${i})" data-index="${i}">
+        ${labels.map((opt, i) => {
+          let extraClass = prevAns?.answer === i ? 'selected' : '';
+          if (quiz.isReviewMode && quiz.answerConfirmed) {
+            if (i === q.correct_answer) extraClass += ' correct';
+            else if (prevAns?.answer === i) extraClass += ' wrong';
+          }
+          return `
+          <div class="option-item ${extraClass}"
+               ${(quiz.isReviewMode && quiz.answerConfirmed) ? '' : `onclick="selectOption(${i})"`} data-index="${i}">
             <div class="option-radio"></div>
             <span>${opt}</span>
-          </div>`).join('')}
-      </div>`;
-  } else if (q.type === 'true_false') {
-    const labels = Array.isArray(q.options) && q.options.length ? q.options : ['True', 'False'];
-    questionHtml = `
-      <div class="options-grid">
-        ${labels.map((opt, i) => `
-          <div class="option-item ${prevAns?.answer === i ? 'selected' : ''}"
-               onclick="selectOption(${i})" data-index="${i}">
-            <div class="option-radio"></div>
-            <span>${opt}</span>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>`;
   } else if (q.type === 'essay') {
     questionHtml = `
       <textarea class="essay-textarea" id="essayAnswer"
-        placeholder="Write your answer here...">${prevAns?.answer || ''}</textarea>`;
+        placeholder="اكتب إجابتك هنا..." ${(quiz.isReviewMode && quiz.answerConfirmed) ? 'readonly' : ''}>${prevAns?.answer || ''}</textarea>`;
   } else if (q.type === 'matching') {
     const pairs = q.options || [];
     questionHtml = `
       <div class="matching-container">
-        ${pairs.map((pair, i) => `
+        ${pairs.map((pair, i) => {
+          let rightSide = '';
+          if (quiz.isReviewMode && quiz.answerConfirmed) {
+            const userAns = prevAns?.answer?.find(a => a.left === i)?.right;
+            const isCorrect = userAns === i;
+            const rightText = (typeof pairs[userAns] === 'object' ? pairs[userAns].right : pairs[userAns]) || 'لم يتم الاختيار';
+            rightSide = `
+              <div style="margin-top:8px; padding:10px; border-radius:8px; background: ${isCorrect ? 'var(--success)' : 'var(--danger)'}; color: white; font-size: 0.9rem;">
+                ${rightText}
+              </div>
+            `;
+          } else {
+            rightSide = `
+              <select class="match-select" id="match-${i}">
+                <option value="">اختر المطابقة...</option>
+                ${pairs.map((p, j) =>
+                  `<option value="${j}" ${prevAns?.answer?.find(a => a.left === i)?.right === j ? 'selected' : ''}>${typeof p === 'object' ? p.right : p}</option>`).join('')}
+              </select>
+            `;
+          }
+
+          return `
           <div class="match-item">
             <strong>${typeof pair === 'object' ? pair.left : pair}</strong>
-            <select class="match-select" id="match-${i}">
-              <option value="">Select match...</option>
-              ${pairs.map((p, j) =>
-                `<option value="${j}">${typeof p === 'object' ? p.right : p}</option>`).join('')}
-            </select>
-          </div>`).join('')}
+            ${rightSide}
+          </div>`;
+        }).join('')}
       </div>`;
+  }
+
+  let explanationHtml = '';
+  if (quiz.isReviewMode && quiz.answerConfirmed && q.explanation) {
+    explanationHtml = `
+      <div style="margin-top:20px; padding:16px; border-radius:8px; background:rgba(99,102,241,0.05); border-right:4px solid var(--primary); text-align:right;">
+        <strong style="color:var(--primary); font-size:0.95rem;">${ICONS.info} التعليل:</strong>
+        <p style="margin-top:8px; font-size:0.9rem; line-height:1.5;">${q.explanation}</p>
+      </div>
+    `;
   }
 
   // Timer badge (re-rendered each time; interval still running in background)
@@ -230,30 +269,37 @@ function renderQuizQuestion() {
       <span id="quizTimerEl">${_fmtTime(quiz.timeLeft)}</span>
     </div>` : '';
 
+  let nextBtnText = quiz.currentIndex === quiz.questions.length - 1 ? 'إنهاء الاختبار' : 'التالي';
+  let nextBtnIcon = quiz.currentIndex === quiz.questions.length - 1 ? '' : ICONS.arrowLeft;
+  if (quiz.isReviewMode && !quiz.answerConfirmed) {
+    nextBtnText = 'تأكيد الإجابة';
+    nextBtnIcon = ICONS.check;
+  }
+
   $('quizContent').innerHTML = `
     <div class="glass question-card">
       <div class="quiz-progress">${progressHtml}</div>
       <div style="display:flex; justify-content:space-between; align-items:center;
                   margin-bottom:20px; flex-wrap:wrap; gap:8px;">
         <span style="color:var(--text-muted); font-size:0.9rem;">
-          Question ${quiz.currentIndex + 1} of ${quiz.questions.length}
+          السؤال ${quiz.currentIndex + 1} من ${quiz.questions.length}
         </span>
         <div style="display:flex; align-items:center; gap:12px;">
           ${timerHtml}
           <span style="color:var(--primary); font-weight:700;">
-            ${q.points} pt${q.points !== 1 ? 's' : ''}
+            ${q.points} نقطة
           </span>
         </div>
       </div>
       <div class="question-text">${q.question_text}</div>
       ${questionHtml}
+      ${explanationHtml}
       <div style="margin-top:32px; display:flex; justify-content:space-between;">
         ${quiz.currentIndex > 0
-          ? `<button class="btn btn-secondary" onclick="prevQuestion()">${ICONS.arrowRight} Previous</button>`
+          ? `<button class="btn btn-secondary" onclick="prevQuestion()">${ICONS.arrowRight} السابق</button>`
           : '<div></div>'}
         <button class="btn btn-primary" onclick="nextQuestion()">
-          ${quiz.currentIndex === quiz.questions.length - 1 ? 'Finish Quiz' : 'Next'}
-          ${quiz.currentIndex === quiz.questions.length - 1 ? '' : ICONS.arrowLeft}
+          ${nextBtnText} ${nextBtnIcon}
         </button>
       </div>
     </div>`;
@@ -269,55 +315,119 @@ function selectOption(index) {
 
 function prevQuestion() {
   state.currentQuiz.currentIndex--;
+  if (state.currentQuiz.isReviewMode) {
+    state.currentQuiz.answerConfirmed = true; // Automatically show the confirmed state when going back
+  }
   renderQuizQuestion();
 }
 
 function nextQuestion() {
   const quiz = state.currentQuiz;
   const q = quiz.questions[quiz.currentIndex];
-  let answer = null;
-  let isCorrect = false;
 
-  if (q.type === 'mcq' || q.type === 'true_false') {
-    const selected = document.querySelector('.option-item.selected');
-    if (!selected) { showToast('Please select an answer', 'error'); return; }
-    answer = parseInt(selected.dataset.index);
-    isCorrect = answer === q.correct_answer;
-  } else if (q.type === 'essay') {
-    answer = $('essayAnswer').value.trim();
-    if (!answer) { showToast('Please write an answer', 'error'); return; }
-    isCorrect = null; // pending manual grading
-  } else if (q.type === 'matching') {
-    const pairs = q.options || [];
-    answer = [];
-    let allCorrect = true;
-    pairs.forEach((_, i) => {
-      const val = $(`match-${i}`).value;
-      answer.push({ left: i, right: parseInt(val) });
-      if (parseInt(val) !== i) allCorrect = false;
-    });
-    isCorrect = allCorrect;
+  if (quiz.isReviewMode && !quiz.answerConfirmed) {
+    let answer = null;
+    let isCorrect = false;
+
+    if (q.type === 'mcq' || q.type === 'true_false') {
+      const selected = document.querySelector('.option-item.selected');
+      if (!selected) { showToast('يرجى اختيار إجابة أولاً', 'error'); return; }
+      answer = parseInt(selected.dataset.index);
+      isCorrect = answer === q.correct_answer;
+    } else if (q.type === 'essay') {
+      answer = $('essayAnswer').value.trim();
+      if (!answer) { showToast('يرجى كتابة إجابة أولاً', 'error'); return; }
+      isCorrect = null;
+    } else if (q.type === 'matching') {
+      const pairs = q.options || [];
+      answer = [];
+      let allCorrect = true;
+      let missing = false;
+      pairs.forEach((_, i) => {
+        const val = $(`match-${i}`).value;
+        if (val === '') { missing = true; }
+        answer.push({ left: i, right: parseInt(val) });
+        if (parseInt(val) !== i) allCorrect = false;
+      });
+      if (missing) { showToast('يرجى إكمال جميع المطابقات', 'error'); return; }
+      isCorrect = allCorrect;
+    }
+
+    quiz.answers[quiz.currentIndex] = {
+      question_id: q.question_id,
+      type: q.type,
+      answer,
+      isCorrect,
+      points: isCorrect ? q.points : 0
+    };
+
+    quiz.answerConfirmed = true;
+    if (quiz.timerInterval) {
+      clearInterval(quiz.timerInterval);
+      quiz.timerInterval = null;
+    }
+    renderQuizQuestion();
+    return;
   }
 
-  // FIX: subtract old score first to avoid double-counting when going back & re-answering
-  const oldAns = quiz.answers[quiz.currentIndex];
-  if (oldAns?.isCorrect) quiz.score -= (oldAns.points || 0);
+  // If we reach here, we are either NOT in review mode, or we are in review mode and ALREADY confirmed.
+  
+  if (!quiz.isReviewMode) {
+    let answer = null;
+    let isCorrect = false;
 
-  quiz.answers[quiz.currentIndex] = {
-    question_id: q.question_id,
-    type: q.type,
-    answer,
-    isCorrect,
-    points: isCorrect ? q.points : 0
-  };
+    if (q.type === 'mcq' || q.type === 'true_false') {
+      const selected = document.querySelector('.option-item.selected');
+      if (!selected) { showToast('Please select an answer', 'error'); return; }
+      answer = parseInt(selected.dataset.index);
+      isCorrect = answer === q.correct_answer;
+    } else if (q.type === 'essay') {
+      answer = $('essayAnswer').value.trim();
+      if (!answer) { showToast('Please write an answer', 'error'); return; }
+      isCorrect = null; // pending manual grading
+    } else if (q.type === 'matching') {
+      const pairs = q.options || [];
+      answer = [];
+      let allCorrect = true;
+      pairs.forEach((_, i) => {
+        const val = $(`match-${i}`).value;
+        answer.push({ left: i, right: parseInt(val) });
+        if (parseInt(val) !== i) allCorrect = false;
+      });
+      isCorrect = allCorrect;
+    }
 
-  if (isCorrect) quiz.score += q.points;
+    const oldAns = quiz.answers[quiz.currentIndex];
+    if (oldAns?.isCorrect) quiz.score -= (oldAns.points || 0);
+
+    quiz.answers[quiz.currentIndex] = {
+      question_id: q.question_id,
+      type: q.type,
+      answer,
+      isCorrect,
+      points: isCorrect ? q.points : 0
+    };
+
+    if (isCorrect) quiz.score += q.points;
+  }
 
   if (quiz.currentIndex < quiz.questions.length - 1) {
     quiz.currentIndex++;
+    if (quiz.isReviewMode) {
+      quiz.answerConfirmed = quiz.answers[quiz.currentIndex] !== null;
+    }
     renderQuizQuestion();
   } else {
-    submitQuiz();
+    if (quiz.isReviewMode) {
+      showToast('🎉 اكتملت المراجعة بنجاح!', 'success');
+      if (state.user.role === 'admin') {
+        navigateTo('admin');
+      } else {
+        navigateTo('dashboard');
+      }
+    } else {
+      submitQuiz();
+    }
   }
 }
 

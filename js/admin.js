@@ -234,6 +234,10 @@ async function renderAdminQuizzes(container) {
                 onclick="toggleQuizQuestions('${quiz.quiz_id}')">
                 View Questions
               </button>
+              <button class="btn btn-success" style="padding: 8px 16px; font-size: 0.85rem; background: var(--success); color: white; border-color: var(--success);"
+                onclick="startQuiz('${mat.material_id}', '${quiz.quiz_id}', true)">
+                ▶ مراجعة (مع الطلبة)
+              </button>
               <button class="btn btn-secondary" style="padding: 8px; font-size: 0.85rem;" title="Quiz Settings"
                 onclick='showModal("editQuizSettings", ${JSON.stringify({quiz_id: quiz.quiz_id, material_id: mat.material_id, title: mat.title, time_limit: quiz.time_limit || 0}).replace(/'/g, "&#39;")})'>
                 ⚙
